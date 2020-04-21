@@ -17,18 +17,18 @@ type Param struct {
 
 // Paginator 分页返回
 type Paginator struct {
-	TotalRecord int         `json:"total_record"`
-	TotalPage   int         `json:"total_page"`
+	TotalRecord int         `json:"totalRecordNum"`
+	TotalPage   int         `json:"totalPageNum"`
 	Records     interface{} `json:"records"`
 	Offset      int         `json:"offset"`
 	Limit       int         `json:"limit"`
 	Page        int         `json:"page"`
-	PrevPage    int         `json:"prev_page"`
-	NextPage    int         `json:"next_page"`
+	PrevPage    int         `json:"prevPage"`
+	NextPage    int         `json:"nextPage"`
 }
 
 // Paging 分页
-func Paging(p *Param, result interface{}) *Paginator {
+func Paging(p *Param, result interface{}) (*Paginator, error) {
 	db := p.DB
 
 	if p.ShowSQL {
@@ -46,7 +46,7 @@ func Paging(p *Param, result interface{}) *Paginator {
 		}
 	}
 
-	done := make(chan bool, 1)
+	done := make(chan error, 1)
 	var paginator Paginator
 	var count int
 	var offset int
@@ -59,8 +59,16 @@ func Paging(p *Param, result interface{}) *Paginator {
 		offset = (p.Page - 1) * p.Limit
 	}
 
-	db.Limit(p.Limit).Offset(offset).Find(result)
-	<-done
+	err := db.Limit(p.Limit).Offset(offset).Find(result).Error
+	if err != nil {
+		// FIXME: what's the best practice?
+		<-done
+		return nil, err
+	}
+	err = <-done
+	if err != nil {
+		return nil, err
+	}
 
 	paginator.TotalRecord = count
 	paginator.Records = result
@@ -81,10 +89,9 @@ func Paging(p *Param, result interface{}) *Paginator {
 	} else {
 		paginator.NextPage = p.Page + 1
 	}
-	return &paginator
+	return &paginator, nil
 }
 
-func countRecords(db *gorm.DB, anyType interface{}, done chan bool, count *int) {
-	db.Model(anyType).Count(count)
-	done <- true
+func countRecords(db *gorm.DB, anyType interface{}, done chan error, count *int) {
+	done <- db.Model(anyType).Count(count).Error
 }
