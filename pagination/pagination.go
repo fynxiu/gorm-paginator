@@ -40,6 +40,10 @@ func Paging(p *Param, result interface{}) (*Paginator, error) {
 	if p.Limit == 0 {
 		p.Limit = 10
 	}
+	if p.Limit > 100 {
+		p.Limit = 100
+	}
+
 	if len(p.OrderBy) > 0 {
 		for _, o := range p.OrderBy {
 			db = db.Order(o)
